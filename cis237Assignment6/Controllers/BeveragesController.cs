@@ -7,6 +7,7 @@ using System.Net;
 using System.Web;
 using System.Web.Mvc;
 using cis237Assignment6.Models;
+using System.Data.Entity.Infrastructure;
 
 namespace cis237Assignment6.Controllers
 {
@@ -18,7 +19,42 @@ namespace cis237Assignment6.Controllers
         // GET: Beverages
         public ActionResult Index()
         {
-            return View(db.Beverages.ToList());
+            DbSet<Beverage> beveragesToFilter = db.Beverages;
+
+            string filterName = "";
+            string filterMin = "";
+            string filterMax = "";
+
+            int min = 0;
+            int max = 200;
+
+            if (Session["name"] != null && !string.IsNullOrWhiteSpace((string)Session["name"]))
+            {
+                filterName = (string)Session["name"];
+            }
+
+            if (Session["min"] != null && !string.IsNullOrWhiteSpace((string)Session["min"]))
+            {
+                filterMin = (string)Session["min"];
+                min = int.Parse(filterMin);
+            }
+
+            if (Session["max"] != null && !string.IsNullOrWhiteSpace((string)Session["max"]))
+            {
+                filterMax = (string)Session["max"];
+                max = int.Parse(filterMax);
+            }
+
+            IEnumerable<Beverage> filtered = beveragesToFilter.Where(beverage => beverage.price >= min &&
+                                                                    beverage.price <= max &&
+                                                                    beverage.name.Contains(filterName));
+            IEnumerable<Beverage> finalFiltered = filtered.ToList();
+
+            ViewBag.filterName = filterName;
+            ViewBag.filterMin = filterMin;
+            ViewBag.filterMax = filterMax;
+
+            return View(finalFiltered);
         }
 
         // GET: Beverages/Details/5
@@ -49,11 +85,18 @@ namespace cis237Assignment6.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult Create([Bind(Include = "id,name,pack,price,active")] Beverage beverage)
         {
-            if (ModelState.IsValid)
+            try
             {
-                db.Beverages.Add(beverage);
-                db.SaveChanges();
-                return RedirectToAction("Index");
+                if (ModelState.IsValid)
+                {
+                    db.Beverages.Add(beverage);
+                    db.SaveChanges();
+                    return RedirectToAction("Index");
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                return RedirectToAction("ItemExists");
             }
 
             return View(beverage);
@@ -81,12 +124,16 @@ namespace cis237Assignment6.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult Edit([Bind(Include = "id,name,pack,price,active")] Beverage beverage)
         {
+
             if (ModelState.IsValid)
             {
                 db.Entry(beverage).State = EntityState.Modified;
                 db.SaveChanges();
                 return RedirectToAction("Index");
             }
+
+
+
             return View(beverage);
         }
 
@@ -114,6 +161,22 @@ namespace cis237Assignment6.Controllers
             db.Beverages.Remove(beverage);
             db.SaveChanges();
             return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Filter()
+        {
+            Session["name"] = Request.Form.Get("name");
+            Session["min"] = Request.Form.Get("min");
+            Session["max"] = Request.Form.Get("max");
+
+            return RedirectToAction("Index");
+        }
+
+        public ActionResult ItemExists()
+        {
+            return View();
         }
 
         protected override void Dispose(bool disposing)
